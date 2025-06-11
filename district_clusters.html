@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>District Clustering Tool</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 100%;
+            padding: 20px;
+        }
+
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 25px;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .slider-label {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1rem;
+        }
+
+        .slider {
+            width: 200px;
+            height: 8px;
+            border-radius: 5px;
+            background: linear-gradient(to right, #667eea, #764ba2);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            border: 3px solid #667eea;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            border: 3px solid #667eea;
+        }
+
+        .cluster-value {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 1.2rem;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .file-input-container {
+            display: none;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            display: none;
+        }
+
+        .main-content {
+            max-width: 1200px;
+            margin: 20px auto;
+            display: flex;
+            gap: 20px;
+            padding: 0 20px;
+        }
+
+        .map-container {
+            flex: 2;
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            min-height: 600px;
+        }
+
+        #map {
+            width: 100%;
+            height: 600px;
+        }
+
+        .sidebar {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .sidebar h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .cluster-info {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .cluster-info h4 {
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+
+        .cluster-info p {
+            color: #555;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-card .label {
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+
+        .error-message {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-message {
+            background: #51cf66;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .debug-info {
+            display: none !important;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .slider-container {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <div class="header">
+                <h1>🗺️ District Clustering Tool</h1>
+            </div>
+            
+            <div class="controls">
+                <div class="slider-container">
+                    <span class="slider-label">Cluster Zones:</span>
+                    <input type="range" min="5" max="20" value="10" class="slider" id="clusterSlider">
+                    <span class="cluster-value" id="clusterValue">10</span>
+                </div>
+                <button class="button" id="generateBtn" onclick="generateClusters()">
+                    Generate Clusters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="error-message" id="errorMessage"></div>
+            <div class="success-message" id="successMessage"></div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="number" id="totalDistricts">0</span>
+                    <span class="label">Districts</span>
+                </div>
+                <div class="stat-card">
+                    <span class="number" id="totalClusters">0</span>
+                    <span class="label">Clusters</span>
+                </div>
+                <div class="stat-card">
+                    <span class="number" id="totalOrders">0</span>
+                    <span class="label">Total Orders</span>
+                </div>
+            </div>
+            
+            <h3>📊 Cluster Summary</h3>
+            <div class="loading" id="loading">
+                <p>🔄 Processing data...</p>
+            </div>
+            <div id="clusterSummary">
+                <p style="text-align: center; color: #666; font-style: italic;">
+                    Upload an Excel file to get started
+                </p>
+            </div>
+            
+            <div id="debugInfo" class="debug-info">
+                <h4>Debug Information:</h4>
+                <div id="debugContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        // Global variables
+        let map;
+        let currentData = null;
+        let currentClusters = [];
+        let districtLayers = [];
+        
+        // Color palette for clusters
+        const clusterColors = [
+            "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", 
+            "#46f0f0", "#f032e6", "#bcf60c", "#fabebe", "#008080", "#e6beff", 
+            "#9a6324", "#fffac8", "#800000", "#aaffc3", "#808000", "#ffd8b1", 
+            "#000075", "#808080"
+        ];
+
+        // Initialize map when page loads
+        window.addEventListener('load', function() {
+            initMap();
+            loadExcelFile();
+        });
+
+        // Initialize map
+        function initMap() {
+            try {
+                map = L.map('map').setView([26.3927, 50.0981], 11);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+                
+                console.log('Map initialized successfully');
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                showError('Error initializing map: ' + error.message);
+            }
+        }
+
+        // Debug function
+        function addDebugInfo(message) {
+            const debugContent = document.getElementById('debugContent');
+            debugContent.innerHTML += '<p>' + new Date().toLocaleTimeString() + ': ' + message + '</p>';
+            console.log('DEBUG:', message);
+        }
+
+        // Utility functions
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 8000);
+            addDebugInfo('ERROR: ' + message);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 5000);
+            addDebugInfo('SUCCESS: ' + message);
+        }
+
+        // Slider event listener
+        document.getElementById('clusterSlider').addEventListener('input', function(e) {
+            document.getElementById('clusterValue').textContent = e.target.value;
+        });
+
+        // Load Excel file
+        function loadExcelFile() {
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+
+            fetch('districts_GeoJSON.xlsx')
+                .then(response => response.arrayBuffer())
+                .then(data => {
+                    try {
+                        const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
+                        let allDistricts = [];
+                        
+                        for (const sheetName of workbook.SheetNames) {
+                            try {
+                                const sheet = workbook.Sheets[sheetName];
+                                const sheetData = XLSX.utils.sheet_to_json(sheet);
+                                
+                                if (sheetData.length > 0) {
+                                    const districts = processSheetData(sheetData, sheetName);
+                                    allDistricts = allDistricts.concat(districts);
+                                }
+                            } catch (sheetError) {
+                                console.error(`Error processing sheet "${sheetName}":`, sheetError);
+                            }
+                        }
+                        
+                        if (allDistricts.length === 0) {
+                            throw new Error('No valid districts found in the Excel file.');
+                        }
+                        
+                        currentData = allDistricts;
+                        updateStats();
+                        updateMapWithDistricts();
+                        
+                        showSuccess(`Loaded ${allDistricts.length} districts successfully!`);
+                        loading.classList.remove('show');
+                    } catch (error) {
+                        console.error('Error processing Excel file:', error);
+                        showError('Error processing Excel file: ' + error.message);
+                        loading.classList.remove('show');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading Excel file:', error);
+                    showError('Error loading Excel file: ' + error.message);
+                    loading.classList.remove('show');
+                });
+        }
+
+        function processSheetData(sheetData, cityName) {
+            const districts = [];
+            
+            sheetData.forEach((row, index) => {
+                try {
+                    // Handle different possible column names - more flexible matching
+                    const districtName = findColumnValue(row, [
+                        'District name', 'District Name', 'district_name', 'district', 'District',
+                        'name', 'Name', 'DISTRICT_NAME', 'DISTRICT'
+                    ]) || `District ${index + 1}`;
+                    
+                    const geoJsonStr = findColumnValue(row, [
+                        'GeoJSON', 'geojson', 'GeoJson', 'GEOJSON', 'geo_json', 'geometry'
+                    ]);
+                    
+                    // Debug: print the raw GeoJSON string
+                    addDebugInfo(`Raw GeoJSON for district "${districtName}": ${geoJsonStr}`);
+                    
+                    const orderQty = parseFloat(findColumnValue(row, [
+                        'Order qty', 'Order Qty', 'order_qty', 'ORDER_QTY', 'orders', 'Orders',
+                        'quantity', 'Quantity', 'qty', 'Qty'
+                    ]) || 0);
+                    
+                    if (!geoJsonStr) {
+                        addDebugInfo(`Skipping district "${districtName}" - no GeoJSON data found`);
+                        return;
+                    }
+
+                    let geoJson;
+                    try {
+                        // Try to parse the GeoJSON string
+                        geoJson = typeof geoJsonStr === 'string' ? JSON.parse(geoJsonStr) : geoJsonStr;
+                    } catch (e1) {
+                        // Attempt to clean the string if parsing fails
+                        let cleaned = geoJsonStr;
+                        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+                            cleaned = cleaned.slice(1, -1);
+                        }
+                        cleaned = cleaned.replace(/""/g, '"');
+                        try {
+                            geoJson = JSON.parse(cleaned);
+                            addDebugInfo(`GeoJSON for district "${districtName}" was cleaned and parsed successfully.`);
+                        } catch (e2) {
+                            addDebugInfo(`Error parsing GeoJSON for district "${districtName}": ${e2.message}`);
+                            return;
+                        }
+                    }
+                    
+                    // Handle Polygon and MultiPolygon
+                    let coords;
+                    if (geoJson.type === 'Polygon') {
+                        coords = geoJson.coordinates[0];
+                    } else if (geoJson.type === 'MultiPolygon') {
+                        coords = geoJson.coordinates[0][0];
+                    } else {
+                        addDebugInfo(`Unsupported GeoJSON type for district "${districtName}": ${geoJson.type}`);
+                        return;
+                    }
+                    
+                    if (!coords || !Array.isArray(coords) || coords.length < 3) {
+                        addDebugInfo(`Invalid coordinates for district "${districtName}"`);
+                        return;
+                    }
+                    
+                    let totalLat = 0, totalLng = 0;
+                    coords.forEach(coord => {
+                        if (Array.isArray(coord) && coord.length >= 2) {
+                            totalLng += parseFloat(coord[0]);
+                            totalLat += parseFloat(coord[1]);
+                        }
+                    });
+                    const centroidLat = totalLat / coords.length;
+                    const centroidLng = totalLng / coords.length;
+                    if (isNaN(centroidLat) || isNaN(centroidLng)) {
+                        addDebugInfo(`Invalid centroid calculation for district "${districtName}"`);
+                        return;
+                    }
+                    districts.push({
+                        id: districts.length,
+                        name: districtName,
+                        city: cityName,
+                        geoJson: geoJson,
+                        lat: centroidLat,
+                        lng: centroidLng,
+                        orderQty: orderQty || 0,
+                        area: calculatePolygonArea(coords)
+                    });
+                    addDebugInfo(`Successfully processed district "${districtName}"`);
+                } catch (error) {
+                    addDebugInfo(`Error processing district ${index}: ${error.message}`);
+                }
+            });
+            
+            return districts;
+        }
+
+        function findColumnValue(row, possibleNames) {
+            for (const name of possibleNames) {
+                if (row.hasOwnProperty(name) && row[name] !== null && row[name] !== undefined && row[name] !== '') {
+                    return row[name];
+                }
+            }
+            return null;
+        }
+
+        function calculatePolygonArea(coordinates) {
+            if (!coordinates || coordinates.length < 3) return 0;
+            
+            let area = 0;
+            const n = coordinates.length;
+            
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                area += coordinates[i][0] * coordinates[j][1];
+                area -= coordinates[j][0] * coordinates[i][1];
+            }
+            
+            // Convert to square kilometers
+            // Using the Haversine formula to calculate actual distances
+            const earthRadius = 6371; // Earth's radius in kilometers
+            const areaInSquareKm = (Math.abs(area) / 2) * (Math.PI / 180) * (Math.PI / 180) * earthRadius * earthRadius;
+            
+            return areaInSquareKm;
+        }
+
+        function updateStats() {
+            if (!currentData) return;
+            
+            document.getElementById('totalDistricts').textContent = currentData.length;
+            document.getElementById('totalClusters').textContent = currentClusters.length > 0 ? Math.max(...currentClusters) + 1 : 0;
+            document.getElementById('totalOrders').textContent = currentData.reduce((sum, d) => sum + d.orderQty, 0);
+        }
+
+        function updateMapWithDistricts() {
+            if (!map) {
+                addDebugInfo('Map not initialized, skipping district update');
+                return;
+            }
+            
+            // Clear existing layers
+            districtLayers.forEach(layer => {
+                map.removeLayer(layer);
+            });
+            districtLayers = [];
+            
+            if (!currentData || currentData.length === 0) return;
+            
+            let bounds = [];
+            
+            // Add districts to map
+            currentData.forEach((district, index) => {
+                try {
+                    if (district.geoJson && district.geoJson.coordinates) {
+                        // Convert coordinates to Leaflet format for Polygon and MultiPolygon
+                        let leafletCoords;
+                        if (district.geoJson.type === 'Polygon') {
+                            leafletCoords = district.geoJson.coordinates.map(ring =>
+                                ring.map(coord => [coord[1], coord[0]])
+                            );
+                        } else if (district.geoJson.type === 'MultiPolygon') {
+                            leafletCoords = district.geoJson.coordinates.map(polygon =>
+                                polygon[0].map(coord => [coord[1], coord[0]])
+                            );
+                        }
+                        const polygon = L.polygon(leafletCoords, {
+                            color: '#333',
+                            weight: 2,
+                            fillColor: '#3388ff',
+                            fillOpacity: 0.5
+                        }).addTo(map);
+                        
+                        polygon.bindPopup(`
+                            <div style="font-family: 'Segoe UI', sans-serif;">
+                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
+                                <p><strong>City:</strong> ${district.city}</p>
+                                <p><strong>Order Qty:</strong> ${district.orderQty}</p>
+                                <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
+                                <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
+                            </div>
+                        `);
+                        
+                        districtLayers.push(polygon);
+                        bounds.push([district.lat, district.lng]);
+                    } else {
+                        // Add a simple marker for districts without polygons
+                        const marker = L.marker([district.lat, district.lng]).addTo(map);
+                        
+                        marker.bindPopup(`
+                            <div style="font-family: 'Segoe UI', sans-serif;">
+                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
+                                <p><strong>City:</strong> ${district.city}</p>
+                                <p><strong>Order Qty:</strong> ${district.orderQty}</p>
+                                <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
+                                <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
+                            </div>
+                        `);
+                        
+                        districtLayers.push(marker);
+                        bounds.push([district.lat, district.lng]);
+                    }
+                } catch (error) {
+                    addDebugInfo(`Error adding district "${district.name}" to map: ${error.message}`);
+                }
+            });
+            
+            // Fit map to show all districts
+            if (bounds.length > 0) {
+                try {
+                    map.fitBounds(bounds, { padding: [20, 20] });
+                } catch (error) {
+                    addDebugInfo(`Error fitting map bounds: ${error.message}`);
+                }
+            }
+        }
+
+        // --- Aggressive Balancing: Largest-first assignment, then pairwise swaps ---
+        function optimizedClustering(districts, k) {
+            if (!districts || districts.length === 0) return [];
+            if (k >= districts.length) return districts.map((_, i) => i);
+
+            // 1. Sort districts by orderQty descending
+            const sortedIdx = districts.map((d, i) => i)
+                .sort((a, b) => districts[b].orderQty - districts[a].orderQty);
+
+            // 2. Initialize clusters with centroids (K-means++ style)
+            let centroids = [];
+            let clusters = Array(districts.length).fill(-1);
+            let clusterOrderQty = Array(k).fill(0);
+
+            // First centroid: random district
+            centroids.push({...districts[sortedIdx[0]]});
+
+            // Subsequent centroids: maximize distance from existing centroids
+            for (let i = 1; i < k; i++) {
+                let maxDist = -1;
+                let bestIdx = -1;
+                for (let idx of sortedIdx) {
+                    if (clusters[idx] !== -1) continue;
+                    let minDist = Infinity;
+                    for (let c of centroids) {
+                        const dist = getDistance(districts[idx], c);
+                        minDist = Math.min(minDist, dist);
+                    }
+                    if (minDist > maxDist) {
+                        maxDist = minDist;
+                        bestIdx = idx;
+                    }
+                }
+                centroids.push({...districts[bestIdx]});
+            }
+
+            // Calculate average distance between all districts for threshold
+            let totalDist = 0;
+            let count = 0;
+            for (let i = 0; i < districts.length; i++) {
+                for (let j = i + 1; j < districts.length; j++) {
+                    totalDist += getDistance(districts[i], districts[j]);
+                    count++;
+                }
+            }
+            const avgDist = totalDist / count;
+            const maxAllowedDist = avgDist * 0.5; // Maximum allowed distance between district and centroid
+
+            // 3. Assign districts to clusters with stronger emphasis on spatial proximity
+            for (let idx of sortedIdx) {
+                let bestCluster = 0;
+                let bestScore = Infinity;
+                for (let c = 0; c < k; c++) {
+                    const dist = getDistance(districts[idx], centroids[c]);
+                    // Skip if distance is too large
+                    if (dist > maxAllowedDist) continue;
+                    
+                    const qtyScore = clusterOrderQty[c];
+                    // Increase weight of spatial distance (0.8) vs order quantity (0.2)
+                    const score = dist * 0.8 + qtyScore * 0.2;
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestCluster = c;
+                    }
+                }
+                // If no suitable cluster found within distance threshold, find closest
+                if (bestScore === Infinity) {
+                    let minDist = Infinity;
+                    for (let c = 0; c < k; c++) {
+                        const dist = getDistance(districts[idx], centroids[c]);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            bestCluster = c;
+                        }
+                    }
+                }
+                clusters[idx] = bestCluster;
+                clusterOrderQty[bestCluster] += districts[idx].orderQty;
+            }
+
+            // 4. Iterative refinement with stricter spatial constraints
+            let improved = true;
+            let iterations = 0;
+            const maxIterations = 100;
+
+            while (improved && iterations < maxIterations) {
+                improved = false;
+                iterations++;
+
+                // Try all possible pairwise swaps
+                for (let i = 0; i < districts.length; i++) {
+                    for (let j = i + 1; j < districts.length; j++) {
+                        const clusterI = clusters[i];
+                        const clusterJ = clusters[j];
+
+                        // Skip if same cluster
+                        if (clusterI === clusterJ) continue;
+
+                        // Calculate spatial impact
+                        const currentSpatialScore = getDistance(districts[i], centroids[clusterI]) + 
+                                                  getDistance(districts[j], centroids[clusterJ]);
+                        const newSpatialScore = getDistance(districts[i], centroids[clusterJ]) + 
+                                              getDistance(districts[j], centroids[clusterI]);
+
+                        // Only consider swap if it improves spatial compactness
+                        if (newSpatialScore < currentSpatialScore) {
+                            // Calculate order quantity impact
+                            const currentImbalance = Math.abs(clusterOrderQty[clusterI] - clusterOrderQty[clusterJ]);
+                            const newImbalance = Math.abs(
+                                (clusterOrderQty[clusterI] - districts[i].orderQty + districts[j].orderQty) -
+                                (clusterOrderQty[clusterJ] - districts[j].orderQty + districts[i].orderQty)
+                            );
+
+                            // Only swap if it doesn't make order quantity balance much worse
+                            if (newImbalance <= currentImbalance * 1.5) {
+                                // Perform swap
+                                clusters[i] = clusterJ;
+                                clusters[j] = clusterI;
+                                clusterOrderQty[clusterI] = clusterOrderQty[clusterI] - districts[i].orderQty + districts[j].orderQty;
+                                clusterOrderQty[clusterJ] = clusterOrderQty[clusterJ] - districts[j].orderQty + districts[i].orderQty;
+                                improved = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return clusters;
+        }
+
+        function getDistance(point1, point2) {
+            const latDiff = point1.lat - point2.lat;
+            const lngDiff = point1.lng - point2.lng;
+            return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+        }
+
+        function generateClusters() {
+            if (!currentData || currentData.length === 0) {
+                showError('No data available!');
+                return;
+            }
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+            const numClusters = parseInt(document.getElementById('clusterSlider').value);
+            setTimeout(() => {
+                try {
+                    // Perform clustering
+                    currentClusters = optimizedClustering(currentData, numClusters);
+                    // Update map
+                    updateMapWithClusters();
+                    // Update cluster summary
+                    updateClusterSummary();
+                    // Update stats
+                    updateStats();
+                    showSuccess(`Generated ${numClusters} clusters successfully!`);
+                } catch (error) {
+                    console.error('Clustering error:', error);
+                    showError('Error generating clusters: ' + error.message);
+                }
+                loading.classList.remove('show');
+            }, 500);
+        }
+
+        function updateMapWithClusters() {
+            if (!map) return;
+            
+            // Clear existing layers
+            districtLayers.forEach(layer => {
+                map.removeLayer(layer);
+            });
+            districtLayers = [];
+            
+            if (!currentData || currentData.length === 0) return;
+            
+            // Add clustered districts to map
+            currentData.forEach((district, index) => {
+                try {
+                    const clusterIndex = currentClusters[index];
+                    const color = clusterColors[clusterIndex % clusterColors.length];
+                    
+                    if (district.geoJson && district.geoJson.coordinates) {
+                        // Convert coordinates to Leaflet format for Polygon and MultiPolygon
+                        let leafletCoords;
+                        if (district.geoJson.type === 'Polygon') {
+                            leafletCoords = district.geoJson.coordinates.map(ring =>
+                                ring.map(coord => [coord[1], coord[0]])
+                            );
+                        } else if (district.geoJson.type === 'MultiPolygon') {
+                            leafletCoords = district.geoJson.coordinates.map(polygon =>
+                                polygon[0].map(coord => [coord[1], coord[0]])
+                            );
+                        }
+                        const polygon = L.polygon(leafletCoords, {
+                            color: color,
+                            weight: 2,
+                            fillColor: color,
+                            fillOpacity: 0.5
+                        }).addTo(map);
+
+                        polygon.bindPopup(`
+                            <div style="font-family: 'Segoe UI', sans-serif;">
+                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
+                                <p><strong>City:</strong> ${district.city}</p>
+                                <p><strong>Order Qty:</strong> ${district.orderQty}</p>
+                                <p><strong>Cluster:</strong> ${clusterIndex + 1}</p>
+                                <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
+                                <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
+                            </div>
+                        `);
+
+                        districtLayers.push(polygon);
+                    } else {
+                        // Add a simple marker for districts without polygons
+                        const marker = L.marker([district.lat, district.lng], {
+                            icon: L.divIcon({
+                                className: 'custom-marker',
+                                html: `<div style="background-color: ${color}; border-radius: 50%; width: 20px; height: 20px;"></div>`
+                            })
+                        }).addTo(map);
+
+                        marker.bindPopup(`
+                            <div style="font-family: 'Segoe UI', sans-serif;">
+                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
+                                <p><strong>City:</strong> ${district.city}</p>
+                                <p><strong>Order Qty:</strong> ${district.orderQty}</p>
+                                <p><strong>Cluster:</strong> ${clusterIndex + 1}</p>
+                                <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
+                                <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
+                            </div>
+                        `);
+
+                        districtLayers.push(marker);
+                    }
+                } catch (error) {
+                    // addDebugInfo(`Error adding clustered district "${district.name}" to map: ${error.message}`);
+                }
+            });
+            // Fit map to show all clusters
+            if (districtLayers.length > 0) {
+                try {
+                    const bounds = L.latLngBounds(
+                        districtLayers.flatMap(layer => {
+                            if (layer.getLatLng) {
+                                return [layer.getLatLng()];
+                            } else if (layer.getBounds) {
+                                return [layer.getBounds().getCenter()];
+                            }
+                            return [];
+                        })
+                    );
+                    map.fitBounds(bounds, { padding: [20, 20] });
+                } catch (error) {
+                    // addDebugInfo(`Error fitting map bounds for clusters: ${error.message}`);
+                }
+            }
+        }
+
+        function updateClusterSummary() {
+            if (!currentClusters || !currentData) return;
+            const k = Math.max(...currentClusters) + 1;
+            const totalOrders = currentData.reduce((sum, d) => sum + d.orderQty, 0);
+            let summary = '';
+            for (let i = 0; i < k; i++) {
+                const clusterDistricts = currentData.filter((_, idx) => currentClusters[idx] === i);
+                const clusterOrders = clusterDistricts.reduce((sum, d) => sum + d.orderQty, 0);
+                const percent = totalOrders > 0 ? ((clusterOrders / totalOrders) * 100).toFixed(1) : 0;
+                const color = clusterColors[i % clusterColors.length];
+                summary += `
+                <div style="border-left: 6px solid ${color}; background: #181c24; margin-bottom: 12px; padding: 10px 16px; border-radius: 6px;">
+                  <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                    <span style="display:inline-block;width:16px;height:16px;background:${color};border-radius:50%;margin-right:8px;"></span>
+                    <b>Cluster ${i + 1}</b>
+                    <span style="margin-left:12px; color:#aaa; font-size:13px;">Districts: ${clusterDistricts.length}</span>
+                    <span style="margin-left:12px; color:#aaa; font-size:13px;">Orders: ${clusterOrders} (${percent}%)</span>
+                  </div>
+                  <ul style="margin:0 0 0 24px; padding:0; color:#eee; font-size:14px;">
+                    ${clusterDistricts.map(d => `<li>${d.name}</li>`).join('')}
+                  </ul>
+                </div>
+                `;
+            }
+            document.getElementById('clusterSummary').innerHTML = summary;
+        }
+    </script>
+</body>
+</html>
