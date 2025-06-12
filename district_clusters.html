@@ -143,18 +143,6 @@
             transform: none;
         }
 
-        .file-input-container {
-            display: none;
-        }
-
-        .file-input {
-            display: none;
-        }
-
-        .file-label {
-            display: none;
-        }
-
         .main-content {
             max-width: 1200px;
             margin: 20px auto;
@@ -204,31 +192,6 @@
             border-left: 4px solid #667eea;
         }
 
-        .cluster-info h4 {
-            color: #667eea;
-            margin-bottom: 8px;
-            font-size: 1.1rem;
-        }
-
-        .cluster-info p {
-            color: #555;
-            font-size: 0.9rem;
-            line-height: 1.4;
-            margin-bottom: 5px;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-            color: #667eea;
-            font-weight: 600;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -273,17 +236,16 @@
             display: none;
         }
 
-        .debug-info {
-            display: none !important;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 10px;
-            margin-top: 20px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            max-height: 200px;
-            overflow-y: auto;
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .loading.show {
+            display: block;
         }
 
         @media (max-width: 768px) {
@@ -356,11 +318,6 @@
                     Upload an Excel file to get started
                 </p>
             </div>
-            
-            <div id="debugInfo" class="debug-info">
-                <h4>Debug Information:</h4>
-                <div id="debugContent"></div>
-            </div>
         </div>
     </div>
 
@@ -368,73 +325,60 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script>
         // Global variables
-        let map;
-        let currentData = null;
-        let currentClusters = [];
-        let districtLayers = [];
-        
-        // Color palette for clusters
         const clusterColors = [
             "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", 
             "#46f0f0", "#f032e6", "#bcf60c", "#fabebe", "#008080", "#e6beff", 
             "#9a6324", "#fffac8", "#800000", "#aaffc3", "#808000", "#ffd8b1", 
-            "#000075", "#808080"
+            "#000075", "#808080", "#AA6E28", "#B57EDC", "#C0C0C0", "#FFD700",
+            "#00FF00", "#00FFFF", "#FF00FF", "#8A2BE2", "#A52A2A", "#DEB887"
         ];
+        
+        let map;
+        let currentData = null;
+        let currentClusters = [];
+        let districtLayers = [];
 
-        // Initialize map when page loads
-        window.addEventListener('load', function() {
+        // Initialize application
+        function initApp() {
             initMap();
+            setupEventListeners();
             loadExcelFile();
-        });
+        }
 
         // Initialize map
         function initMap() {
             try {
                 map = L.map('map').setView([26.3927, 50.0981], 11);
-                
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '© OpenStreetMap contributors'
                 }).addTo(map);
-                
-                console.log('Map initialized successfully');
             } catch (error) {
-                console.error('Error initializing map:', error);
                 showError('Error initializing map: ' + error.message);
             }
         }
 
-        // Debug function
-        function addDebugInfo(message) {
-            const debugContent = document.getElementById('debugContent');
-            debugContent.innerHTML += '<p>' + new Date().toLocaleTimeString() + ': ' + message + '</p>';
-            console.log('DEBUG:', message);
+        // Set up event listeners
+        function setupEventListeners() {
+            document.getElementById('clusterSlider').addEventListener('input', function(e) {
+                document.getElementById('clusterValue').textContent = e.target.value;
+            });
         }
 
-        // Utility functions
+        // Show error message
         function showError(message) {
             const errorDiv = document.getElementById('errorMessage');
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
-            setTimeout(() => {
-                errorDiv.style.display = 'none';
-            }, 8000);
-            addDebugInfo('ERROR: ' + message);
+            setTimeout(() => errorDiv.style.display = 'none', 8000);
         }
 
+        // Show success message
         function showSuccess(message) {
             const successDiv = document.getElementById('successMessage');
             successDiv.textContent = message;
             successDiv.style.display = 'block';
-            setTimeout(() => {
-                successDiv.style.display = 'none';
-            }, 5000);
-            addDebugInfo('SUCCESS: ' + message);
+            setTimeout(() => successDiv.style.display = 'none', 5000);
         }
-
-        // Slider event listener
-        document.getElementById('clusterSlider').addEventListener('input', function(e) {
-            document.getElementById('clusterValue').textContent = e.target.value;
-        });
 
         // Load Excel file
         function loadExcelFile() {
@@ -446,22 +390,11 @@
                 .then(data => {
                     try {
                         const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
-                        let allDistricts = [];
+                        let allDistricts = processWorkbook(workbook);
                         
-                        for (const sheetName of workbook.SheetNames) {
-                            try {
-                                const sheet = workbook.Sheets[sheetName];
-                                const sheetData = XLSX.utils.sheet_to_json(sheet);
-                                
-                                if (sheetData.length > 0) {
-                                    const districts = processSheetData(sheetData, sheetName);
-                                    allDistricts = allDistricts.concat(districts);
-                                }
-                            } catch (sheetError) {
-                                console.error(`Error processing sheet "${sheetName}":`, sheetError);
-                            }
-                        }
-                        
+                        // Assign sequential IDs after all districts are gathered
+                        allDistricts = allDistricts.map((d, index) => ({ ...d, id: index }));
+
                         if (allDistricts.length === 0) {
                             throw new Error('No valid districts found in the Excel file.');
                         }
@@ -469,127 +402,144 @@
                         currentData = allDistricts;
                         updateStats();
                         updateMapWithDistricts();
-                        
                         showSuccess(`Loaded ${allDistricts.length} districts successfully!`);
-                        loading.classList.remove('show');
                     } catch (error) {
-                        console.error('Error processing Excel file:', error);
                         showError('Error processing Excel file: ' + error.message);
+                    } finally {
                         loading.classList.remove('show');
                     }
                 })
                 .catch(error => {
-                    console.error('Error loading Excel file:', error);
                     showError('Error loading Excel file: ' + error.message);
                     loading.classList.remove('show');
                 });
         }
 
-        function processSheetData(sheetData, cityName) {
-            const districts = [];
+        // Process workbook data
+        function processWorkbook(workbook) {
+            let allDistricts = [];
             
-            sheetData.forEach((row, index) => {
+            workbook.SheetNames.forEach(sheetName => {
                 try {
-                    // Handle different possible column names - more flexible matching
-                    const districtName = findColumnValue(row, [
-                        'District name', 'District Name', 'district_name', 'district', 'District',
-                        'name', 'Name', 'DISTRICT_NAME', 'DISTRICT'
-                    ]) || `District ${index + 1}`;
-                    
-                    const geoJsonStr = findColumnValue(row, [
-                        'GeoJSON', 'geojson', 'GeoJson', 'GEOJSON', 'geo_json', 'geometry'
-                    ]);
-                    
-                    // Debug: print the raw GeoJSON string
-                    addDebugInfo(`Raw GeoJSON for district "${districtName}": ${geoJsonStr}`);
-                    
-                    const orderQty = parseFloat(findColumnValue(row, [
-                        'Order qty', 'Order Qty', 'order_qty', 'ORDER_QTY', 'orders', 'Orders',
-                        'quantity', 'Quantity', 'qty', 'Qty'
-                    ]) || 0);
-                    
-                    if (!geoJsonStr) {
-                        addDebugInfo(`Skipping district "${districtName}" - no GeoJSON data found`);
-                        return;
-                    }
-
-                    let geoJson;
-                    try {
-                        // Try to parse the GeoJSON string
-                        geoJson = typeof geoJsonStr === 'string' ? JSON.parse(geoJsonStr) : geoJsonStr;
-                    } catch (e1) {
-                        // Attempt to clean the string if parsing fails
-                        let cleaned = geoJsonStr;
-                        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
-                            cleaned = cleaned.slice(1, -1);
-                        }
-                        cleaned = cleaned.replace(/""/g, '"');
-                        try {
-                            geoJson = JSON.parse(cleaned);
-                            addDebugInfo(`GeoJSON for district "${districtName}" was cleaned and parsed successfully.`);
-                        } catch (e2) {
-                            addDebugInfo(`Error parsing GeoJSON for district "${districtName}": ${e2.message}`);
-                            return;
-                        }
-                    }
-                    
-                    // Handle Polygon and MultiPolygon
-                    let coords;
-                    if (geoJson.type === 'Polygon') {
-                        coords = geoJson.coordinates[0];
-                    } else if (geoJson.type === 'MultiPolygon') {
-                        coords = geoJson.coordinates[0][0];
-                    } else {
-                        addDebugInfo(`Unsupported GeoJSON type for district "${districtName}": ${geoJson.type}`);
-                        return;
-                    }
-                    
-                    if (!coords || !Array.isArray(coords) || coords.length < 3) {
-                        addDebugInfo(`Invalid coordinates for district "${districtName}"`);
-                        return;
-                    }
-                    
-                    let totalLat = 0, totalLng = 0;
-                    coords.forEach(coord => {
-                        if (Array.isArray(coord) && coord.length >= 2) {
-                            totalLng += parseFloat(coord[0]);
-                            totalLat += parseFloat(coord[1]);
-                        }
-                    });
-                    const centroidLat = totalLat / coords.length;
-                    const centroidLng = totalLng / coords.length;
-                    if (isNaN(centroidLat) || isNaN(centroidLng)) {
-                        addDebugInfo(`Invalid centroid calculation for district "${districtName}"`);
-                        return;
-                    }
-                    districts.push({
-                        id: districts.length,
-                        name: districtName,
-                        city: cityName,
-                        geoJson: geoJson,
-                        lat: centroidLat,
-                        lng: centroidLng,
-                        orderQty: orderQty || 0,
-                        area: calculatePolygonArea(coords)
-                    });
-                    addDebugInfo(`Successfully processed district "${districtName}"`);
-                } catch (error) {
-                    addDebugInfo(`Error processing district ${index}: ${error.message}`);
+                    const sheet = workbook.Sheets[sheetName];
+                    const sheetData = XLSX.utils.sheet_to_json(sheet);
+                    const districts = processSheetData(sheetData, sheetName);
+                    allDistricts = allDistricts.concat(districts);
+                } catch (sheetError) {
+                    console.error(`Error processing sheet "${sheetName}":`, sheetError);
                 }
             });
             
-            return districts;
+            return allDistricts;
         }
 
+        // Process sheet data
+        function processSheetData(sheetData, cityName) {
+            return sheetData
+                .map((row, index) => {
+                    try {
+                        const districtName = findColumnValue(row, [
+                            'District name', 'District Name', 'district_name', 'district', 'District',
+                            'name', 'Name', 'DISTRICT_NAME', 'DISTRICT'
+                        ]) || `District ${index + 1}`;
+                        
+                        const geoJsonStr = findColumnValue(row, [
+                            'GeoJSON', 'geojson', 'GeoJson', 'GEOJSON', 'geo_json', 'geometry'
+                        ]);
+                        
+                        const orderQty = parseFloat(findColumnValue(row, [
+                            'Order qty', 'Order Qty', 'order_qty', 'ORDER_QTY', 'orders', 'Orders',
+                            'quantity', 'Quantity', 'qty', 'Qty'
+                        ]) || 0);
+                        
+                        if (!geoJsonStr) return null;
+
+                        const geoJson = parseGeoJson(geoJsonStr);
+                        if (!geoJson) return null;
+
+                        const { coords, isValid } = getGeoJsonCoordinates(geoJson);
+                        if (!isValid) return null;
+
+                        const { centroidLat, centroidLng } = calculateCentroid(coords);
+                        if (isNaN(centroidLat)) return null;
+
+                        return {
+                            name: districtName,
+                            city: cityName,
+                            geoJson: geoJson,
+                            lat: centroidLat,
+                            lng: centroidLng,
+                            orderQty: orderQty,
+                            area: calculatePolygonArea(coords)
+                        };
+                    } catch (error) {
+                        console.error(`Error processing district ${index}:`, error);
+                        return null;
+                    }
+                })
+                .filter(Boolean);
+        }
+
+        // Find value in row with flexible column name matching
         function findColumnValue(row, possibleNames) {
             for (const name of possibleNames) {
-                if (row.hasOwnProperty(name) && row[name] !== null && row[name] !== undefined && row[name] !== '') {
+                if (row[name] !== null && row[name] !== undefined && row[name] !== '') {
                     return row[name];
                 }
             }
             return null;
         }
 
+        // Parse GeoJSON string
+        function parseGeoJson(geoJsonStr) {
+            try {
+                return typeof geoJsonStr === 'string' ? JSON.parse(geoJsonStr) : geoJsonStr;
+            } catch (e1) {
+                try {
+                    const cleaned = geoJsonStr
+                        .replace(/^"|"$/g, '')
+                        .replace(/""/g, '"');
+                    return JSON.parse(cleaned);
+                } catch (e2) {
+                    return null;
+                }
+            }
+        }
+
+        // Get coordinates from GeoJSON
+        function getGeoJsonCoordinates(geoJson) {
+            let coords;
+            
+            if (geoJson.type === 'Polygon') {
+                coords = geoJson.coordinates[0];
+            } else if (geoJson.type === 'MultiPolygon') {
+                coords = geoJson.coordinates[0][0];
+            } else {
+                return { coords: null, isValid: false };
+            }
+            
+            const isValid = Array.isArray(coords) && coords.length >= 3;
+            return { coords, isValid };
+        }
+
+        // Calculate centroid from coordinates
+        function calculateCentroid(coords) {
+            let totalLat = 0, totalLng = 0;
+            
+            coords.forEach(coord => {
+                if (Array.isArray(coord) && coord.length >= 2) {
+                    totalLng += parseFloat(coord[0]);
+                    totalLat += parseFloat(coord[1]);
+                }
+            });
+            
+            return {
+                centroidLat: totalLat / coords.length,
+                centroidLng: totalLng / coords.length
+            };
+        }
+
+        // Calculate polygon area
         function calculatePolygonArea(coordinates) {
             if (!coordinates || coordinates.length < 3) return 0;
             
@@ -602,185 +552,256 @@
                 area -= coordinates[j][0] * coordinates[i][1];
             }
             
-            // Convert to square kilometers
-            // Using the Haversine formula to calculate actual distances
-            const earthRadius = 6371; // Earth's radius in kilometers
-            const areaInSquareKm = (Math.abs(area) / 2) * (Math.PI / 180) * (Math.PI / 180) * earthRadius * earthRadius;
-            
-            return areaInSquareKm;
+            const earthRadius = 6371;
+            return (Math.abs(area) / 2) * (Math.PI / 180) ** 2 * earthRadius ** 2;
         }
 
+        // Update statistics display
         function updateStats() {
             if (!currentData) return;
             
             document.getElementById('totalDistricts').textContent = currentData.length;
-            document.getElementById('totalClusters').textContent = currentClusters.length > 0 ? Math.max(...currentClusters) + 1 : 0;
+            document.getElementById('totalClusters').textContent = currentClusters.length > 0 
+                ? new Set(currentClusters).size 
+                : 0;
             document.getElementById('totalOrders').textContent = currentData.reduce((sum, d) => sum + d.orderQty, 0);
         }
 
+        // Update map with districts
         function updateMapWithDistricts() {
-            if (!map) {
-                addDebugInfo('Map not initialized, skipping district update');
-                return;
-            }
+            if (!map || !currentData || currentData.length === 0) return;
             
-            // Clear existing layers
-            districtLayers.forEach(layer => {
-                map.removeLayer(layer);
-            });
-            districtLayers = [];
+            clearMapLayers();
             
-            if (!currentData || currentData.length === 0) return;
+            const bounds = L.latLngBounds([]);
             
-            let bounds = [];
-            
-            // Add districts to map
-            currentData.forEach((district, index) => {
-                try {
-                    if (district.geoJson && district.geoJson.coordinates) {
-                        // Convert coordinates to Leaflet format for Polygon and MultiPolygon
-                        let leafletCoords;
-                        if (district.geoJson.type === 'Polygon') {
-                            leafletCoords = district.geoJson.coordinates.map(ring =>
-                                ring.map(coord => [coord[1], coord[0]])
-                            );
-                        } else if (district.geoJson.type === 'MultiPolygon') {
-                            leafletCoords = district.geoJson.coordinates.map(polygon =>
-                                polygon[0].map(coord => [coord[1], coord[0]])
-                            );
-                        }
-                        const polygon = L.polygon(leafletCoords, {
-                            color: '#333',
-                            weight: 2,
-                            fillColor: '#3388ff',
-                            fillOpacity: 0.5
-                        }).addTo(map);
-                        
-                        polygon.bindPopup(`
-                            <div style="font-family: 'Segoe UI', sans-serif;">
-                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
-                                <p><strong>City:</strong> ${district.city}</p>
-                                <p><strong>Order Qty:</strong> ${district.orderQty}</p>
-                                <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
-                                <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
-                            </div>
-                        `);
-                        
-                        districtLayers.push(polygon);
-                        bounds.push([district.lat, district.lng]);
-                    } else {
-                        // Add a simple marker for districts without polygons
-                        const marker = L.marker([district.lat, district.lng]).addTo(map);
-                        
-                        marker.bindPopup(`
-                            <div style="font-family: 'Segoe UI', sans-serif;">
-                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
-                                <p><strong>City:</strong> ${district.city}</p>
-                                <p><strong>Order Qty:</strong> ${district.orderQty}</p>
-                                <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
-                                <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
-                            </div>
-                        `);
-                        
-                        districtLayers.push(marker);
-                        bounds.push([district.lat, district.lng]);
+            currentData.forEach(district => {
+                const layer = createDistrictLayer(district);
+                if (layer) {
+                    districtLayers.push(layer);
+                    if (layer.getBounds) {
+                        bounds.extend(layer.getBounds());
+                    } else if (layer.getLatLng) {
+                        bounds.extend(layer.getLatLng());
                     }
-                } catch (error) {
-                    addDebugInfo(`Error adding district "${district.name}" to map: ${error.message}`);
                 }
             });
             
-            // Fit map to show all districts
-            if (bounds.length > 0) {
-                try {
-                    map.fitBounds(bounds, { padding: [20, 20] });
-                } catch (error) {
-                    addDebugInfo(`Error fitting map bounds: ${error.message}`);
-                }
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [20, 20] });
             }
         }
 
-        // --- Aggressive Balancing: Largest-first assignment, then pairwise swaps ---
+        // Clear all map layers
+        function clearMapLayers() {
+            districtLayers.forEach(layer => {
+                if (map.hasLayer(layer)) {
+                    map.removeLayer(layer);
+                }
+            });
+            districtLayers = [];
+        }
+
+        // Create district layer for map
+        function createDistrictLayer(district) {
+            try {
+                if (district.geoJson?.coordinates) {
+                    const leafletCoords = convertGeoJsonToLeaflet(district.geoJson);
+                    const polygon = L.polygon(leafletCoords, {
+                        color: '#333',
+                        weight: 2,
+                        fillColor: '#3388ff',
+                        fillOpacity: 0.5
+                    });
+                    
+                    polygon.bindPopup(createPopupContent(district));
+                    return polygon;
+                } else {
+                    const marker = L.marker([district.lat, district.lng]);
+                    marker.bindPopup(createPopupContent(district));
+                    return marker;
+                }
+            } catch (error) {
+                console.error(`Error creating layer for district "${district.name}":`, error);
+                return null;
+            }
+        }
+
+        // Convert GeoJSON to Leaflet format
+        function convertGeoJsonToLeaflet(geoJson) {
+            if (geoJson.type === 'Polygon') {
+                return geoJson.coordinates.map(ring =>
+                    ring.map(coord => [coord[1], coord[0]])
+                );
+            } else if (geoJson.type === 'MultiPolygon') {
+                return geoJson.coordinates[0].map(polygon =>
+                    polygon.map(coord => [coord[1], coord[0]])
+                );
+            }
+            return [];
+        }
+
+        // Create popup content for district
+        function createPopupContent(district) {
+            const clusterInfo = currentClusters.length > 0 && district.id !== undefined && currentClusters[district.id] !== undefined
+                ? `<p><strong>Cluster:</strong> ${currentClusters[district.id] + 1}</p>`
+                : '';
+            return `
+                <div style="font-family: 'Segoe UI', sans-serif;">
+                    <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
+                    <p><strong>City:</strong> ${district.city}</p>
+                    <p><strong>Order Qty:</strong> ${district.orderQty}</p>
+                    ${clusterInfo}
+                    <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
+                    <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
+                </div>
+            `;
+        }
+
+        // Generate clusters
+        function generateClusters() {
+            if (!currentData || currentData.length === 0) {
+                showError('No data available!');
+                return;
+            }
+            
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+            
+            setTimeout(() => {
+                try {
+                    const numClusters = parseInt(document.getElementById('clusterSlider').value);
+                    currentClusters = optimizedClustering(currentData, numClusters);
+                    updateMapWithClusters();
+                    updateClusterSummary();
+                    updateStats();
+                    showSuccess(`Generated ${numClusters} clusters successfully!`);
+                } catch (error) {
+                    showError('Error generating clusters: ' + error.message);
+                } finally {
+                    loading.classList.remove('show');
+                }
+            }, 500);
+        }
+
+        // Optimized clustering algorithm
         function optimizedClustering(districts, k) {
             if (!districts || districts.length === 0) return [];
             if (k >= districts.length) return districts.map((_, i) => i);
 
-            // 1. Sort districts by orderQty descending
-            const sortedIdx = districts.map((d, i) => i)
+            // Sort districts by order quantity descending
+            const sortedIdx = districts.map((_, i) => i)
                 .sort((a, b) => districts[b].orderQty - districts[a].orderQty);
 
-            // 2. Initialize clusters with centroids (K-means++ style)
-            let centroids = [];
-            let clusters = Array(districts.length).fill(-1);
-            let clusterOrderQty = Array(k).fill(0);
+            // Initialize clusters with centroids (K-means++ style)
+            const centroids = [];
+            const clusters = Array(districts.length).fill(-1);
+            const clusterOrderQty = Array(k).fill(0);
 
-            // First centroid: random district
+            // First centroid: the district with the highest order quantity
             centroids.push({...districts[sortedIdx[0]]});
 
-            // Subsequent centroids: maximize distance from existing centroids
             for (let i = 1; i < k; i++) {
                 let maxDist = -1;
                 let bestIdx = -1;
+                
                 for (let idx of sortedIdx) {
-                    if (clusters[idx] !== -1) continue;
+                    if (clusters[idx] !== -1) continue; // Skip if already assigned or selected as centroid
+                    
                     let minDist = Infinity;
                     for (let c of centroids) {
                         const dist = getDistance(districts[idx], c);
                         minDist = Math.min(minDist, dist);
                     }
+                    
                     if (minDist > maxDist) {
                         maxDist = minDist;
                         bestIdx = idx;
                     }
                 }
-                centroids.push({...districts[bestIdx]});
+                
+                if (bestIdx !== -1) {
+                    centroids.push({...districts[bestIdx]});
+                } else {
+                    // Fallback: if not enough distinct locations for k centroids, pick remaining sorted districts
+                    for (let idx of sortedIdx) {
+                        if (!centroids.some(c => c.id === districts[idx].id)) {
+                            centroids.push({ ...districts[idx] });
+                            if (centroids.length === k) break;
+                        }
+                    }
+                }
             }
 
-            // Calculate average distance between all districts for threshold
+            // Calculate average distance for threshold
+            const avgDist = calculateAverageDistance(districts);
+            const maxAllowedDist = avgDist * 0.75; // Adjusted threshold
+
+            // Assign districts to clusters
+            for (let idx of sortedIdx) { // Process in order of order quantity
+                let bestCluster = -1;
+                let bestScore = Infinity;
+                
+                for (let c = 0; c < k; c++) {
+                    const dist = getDistance(districts[idx], centroids[c]);
+                    const distPenalty = dist > maxAllowedDist ? (dist - maxAllowedDist) * 100 : 0;
+                    
+                    const currentClusterQty = clusterOrderQty[c];
+                    const score = (dist * 0.7) + (currentClusterQty * 0.001) + distPenalty;
+
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestCluster = c;
+                    }
+                }
+                
+                if (bestCluster === -1) { // If no suitable cluster within distance threshold, find closest
+                    bestCluster = findClosestCentroid(districts[idx], centroids);
+                }
+                
+                clusters[idx] = bestCluster;
+                clusterOrderQty[bestCluster] += districts[idx].orderQty;
+            }
+
+            // Refine clusters through iterative swapping
+            refineClusters(districts, clusters, clusterOrderQty, centroids);
+
+            return clusters;
+        }
+
+        // Calculate average distance between districts
+        function calculateAverageDistance(districts) {
             let totalDist = 0;
             let count = 0;
+            
             for (let i = 0; i < districts.length; i++) {
                 for (let j = i + 1; j < districts.length; j++) {
                     totalDist += getDistance(districts[i], districts[j]);
                     count++;
                 }
             }
-            const avgDist = totalDist / count;
-            const maxAllowedDist = avgDist * 0.5; // Maximum allowed distance between district and centroid
+            
+            return count > 0 ? totalDist / count : 0;
+        }
 
-            // 3. Assign districts to clusters with stronger emphasis on spatial proximity
-            for (let idx of sortedIdx) {
-                let bestCluster = 0;
-                let bestScore = Infinity;
-                for (let c = 0; c < k; c++) {
-                    const dist = getDistance(districts[idx], centroids[c]);
-                    // Skip if distance is too large
-                    if (dist > maxAllowedDist) continue;
-                    
-                    const qtyScore = clusterOrderQty[c];
-                    // Increase weight of spatial distance (0.8) vs order quantity (0.2)
-                    const score = dist * 0.8 + qtyScore * 0.2;
-                    if (score < bestScore) {
-                        bestScore = score;
-                        bestCluster = c;
-                    }
+        // Find closest centroid for a district
+        function findClosestCentroid(district, centroids) {
+            let minDist = Infinity;
+            let bestCluster = 0;
+            
+            for (let c = 0; c < centroids.length; c++) {
+                const dist = getDistance(district, centroids[c]);
+                if (dist < minDist) {
+                    minDist = dist;
+                    bestCluster = c;
                 }
-                // If no suitable cluster found within distance threshold, find closest
-                if (bestScore === Infinity) {
-                    let minDist = Infinity;
-                    for (let c = 0; c < k; c++) {
-                        const dist = getDistance(districts[idx], centroids[c]);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            bestCluster = c;
-                        }
-                    }
-                }
-                clusters[idx] = bestCluster;
-                clusterOrderQty[bestCluster] += districts[idx].orderQty;
             }
+            
+            return bestCluster;
+        }
 
-            // 4. Iterative refinement with stricter spatial constraints
+        // Refine clusters through swapping
+        function refineClusters(districts, clusters, clusterOrderQty, centroids) {
             let improved = true;
             let iterations = 0;
             const maxIterations = 100;
@@ -789,200 +810,152 @@
                 improved = false;
                 iterations++;
 
-                // Try all possible pairwise swaps
+                // Recalculate cluster order quantities before swaps
+                clusterOrderQty.fill(0);
+                districts.forEach((district, idx) => {
+                    const clusterId = clusters[idx];
+                    if (clusterId !== -1) {
+                        clusterOrderQty[clusterId] += district.orderQty;
+                    }
+                });
+
                 for (let i = 0; i < districts.length; i++) {
                     for (let j = i + 1; j < districts.length; j++) {
                         const clusterI = clusters[i];
                         const clusterJ = clusters[j];
 
-                        // Skip if same cluster
-                        if (clusterI === clusterJ) continue;
+                        if (clusterI === clusterJ || clusterI === -1 || clusterJ === -1) continue;
 
-                        // Calculate spatial impact
                         const currentSpatialScore = getDistance(districts[i], centroids[clusterI]) + 
                                                   getDistance(districts[j], centroids[clusterJ]);
                         const newSpatialScore = getDistance(districts[i], centroids[clusterJ]) + 
                                               getDistance(districts[j], centroids[clusterI]);
 
-                        // Only consider swap if it improves spatial compactness
                         if (newSpatialScore < currentSpatialScore) {
-                            // Calculate order quantity impact
                             const currentImbalance = Math.abs(clusterOrderQty[clusterI] - clusterOrderQty[clusterJ]);
-                            const newImbalance = Math.abs(
-                                (clusterOrderQty[clusterI] - districts[i].orderQty + districts[j].orderQty) -
-                                (clusterOrderQty[clusterJ] - districts[j].orderQty + districts[i].orderQty)
-                            );
+                            const tempQtyI = clusterOrderQty[clusterI] - districts[i].orderQty + districts[j].orderQty;
+                            const tempQtyJ = clusterOrderQty[clusterJ] - districts[j].orderQty + districts[i].orderQty;
+                            const newImbalance = Math.abs(tempQtyI - tempQtyJ);
 
-                            // Only swap if it doesn't make order quantity balance much worse
                             if (newImbalance <= currentImbalance * 1.5) {
-                                // Perform swap
                                 clusters[i] = clusterJ;
                                 clusters[j] = clusterI;
-                                clusterOrderQty[clusterI] = clusterOrderQty[clusterI] - districts[i].orderQty + districts[j].orderQty;
-                                clusterOrderQty[clusterJ] = clusterOrderQty[clusterJ] - districts[j].orderQty + districts[i].orderQty;
+                                clusterOrderQty[clusterI] = tempQtyI;
+                                clusterOrderQty[clusterJ] = tempQtyJ;
                                 improved = true;
                             }
                         }
                     }
                 }
             }
-
-            return clusters;
         }
 
+        // Calculate distance between two points
         function getDistance(point1, point2) {
             const latDiff = point1.lat - point2.lat;
             const lngDiff = point1.lng - point2.lng;
             return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
         }
 
-        function generateClusters() {
-            if (!currentData || currentData.length === 0) {
-                showError('No data available!');
-                return;
-            }
-            const loading = document.getElementById('loading');
-            loading.classList.add('show');
-            const numClusters = parseInt(document.getElementById('clusterSlider').value);
-            setTimeout(() => {
-                try {
-                    // Perform clustering
-                    currentClusters = optimizedClustering(currentData, numClusters);
-                    // Update map
-                    updateMapWithClusters();
-                    // Update cluster summary
-                    updateClusterSummary();
-                    // Update stats
-                    updateStats();
-                    showSuccess(`Generated ${numClusters} clusters successfully!`);
-                } catch (error) {
-                    console.error('Clustering error:', error);
-                    showError('Error generating clusters: ' + error.message);
-                }
-                loading.classList.remove('show');
-            }, 500);
-        }
-
+        // Update map with clusters
         function updateMapWithClusters() {
-            if (!map) return;
+            if (!map || !currentData || currentData.length === 0) return;
             
-            // Clear existing layers
-            districtLayers.forEach(layer => {
-                map.removeLayer(layer);
-            });
-            districtLayers = [];
+            clearMapLayers();
             
-            if (!currentData || currentData.length === 0) return;
+            const bounds = L.latLngBounds([]);
             
-            // Add clustered districts to map
             currentData.forEach((district, index) => {
-                try {
-                    const clusterIndex = currentClusters[index];
-                    const color = clusterColors[clusterIndex % clusterColors.length];
-                    
-                    if (district.geoJson && district.geoJson.coordinates) {
-                        // Convert coordinates to Leaflet format for Polygon and MultiPolygon
-                        let leafletCoords;
-                        if (district.geoJson.type === 'Polygon') {
-                            leafletCoords = district.geoJson.coordinates.map(ring =>
-                                ring.map(coord => [coord[1], coord[0]])
-                            );
-                        } else if (district.geoJson.type === 'MultiPolygon') {
-                            leafletCoords = district.geoJson.coordinates.map(polygon =>
-                                polygon[0].map(coord => [coord[1], coord[0]])
-                            );
-                        }
-                        const polygon = L.polygon(leafletCoords, {
-                            color: color,
-                            weight: 2,
-                            fillColor: color,
-                            fillOpacity: 0.5
-                        }).addTo(map);
-
-                        polygon.bindPopup(`
-                            <div style="font-family: 'Segoe UI', sans-serif;">
-                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
-                                <p><strong>City:</strong> ${district.city}</p>
-                                <p><strong>Order Qty:</strong> ${district.orderQty}</p>
-                                <p><strong>Cluster:</strong> ${clusterIndex + 1}</p>
-                                <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
-                                <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
-                            </div>
-                        `);
-
-                        districtLayers.push(polygon);
-                    } else {
-                        // Add a simple marker for districts without polygons
-                        const marker = L.marker([district.lat, district.lng], {
-                            icon: L.divIcon({
-                                className: 'custom-marker',
-                                html: `<div style="background-color: ${color}; border-radius: 50%; width: 20px; height: 20px;"></div>`
-                            })
-                        }).addTo(map);
-
-                        marker.bindPopup(`
-                            <div style="font-family: 'Segoe UI', sans-serif;">
-                                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${district.name}</h4>
-                                <p><strong>City:</strong> ${district.city}</p>
-                                <p><strong>Order Qty:</strong> ${district.orderQty}</p>
-                                <p><strong>Cluster:</strong> ${clusterIndex + 1}</p>
-                                <p><strong>Area:</strong> ${district.area.toFixed(2)} km²</p>
-                                <p><strong>Coordinates:</strong> ${district.lat.toFixed(4)}, ${district.lng.toFixed(4)}</p>
-                            </div>
-                        `);
-
-                        districtLayers.push(marker);
+                const clusterIndex = currentClusters[index];
+                const color = clusterColors[clusterIndex % clusterColors.length];
+                const layer = createClusterLayer(district, color, clusterIndex);
+                
+                if (layer) {
+                    layer.addTo(map);
+                    districtLayers.push(layer);
+                    if (layer.getBounds) {
+                        bounds.extend(layer.getBounds());
+                    } else if (layer.getLatLng) {
+                        bounds.extend(layer.getLatLng());
                     }
-                } catch (error) {
-                    // addDebugInfo(`Error adding clustered district "${district.name}" to map: ${error.message}`);
                 }
             });
-            // Fit map to show all clusters
-            if (districtLayers.length > 0) {
-                try {
-                    const bounds = L.latLngBounds(
-                        districtLayers.flatMap(layer => {
-                            if (layer.getLatLng) {
-                                return [layer.getLatLng()];
-                            } else if (layer.getBounds) {
-                                return [layer.getBounds().getCenter()];
-                            }
-                            return [];
-                        })
-                    );
-                    map.fitBounds(bounds, { padding: [20, 20] });
-                } catch (error) {
-                    // addDebugInfo(`Error fitting map bounds for clusters: ${error.message}`);
-                }
+            
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [20, 20] });
             }
         }
 
+        // Create cluster layer for map
+        function createClusterLayer(district, color, clusterIndex) {
+            try {
+                if (district.geoJson?.coordinates) {
+                    const leafletCoords = convertGeoJsonToLeaflet(district.geoJson);
+                    const polygon = L.polygon(leafletCoords, {
+                        color: color,
+                        weight: 2,
+                        fillColor: color,
+                        fillOpacity: 0.5
+                    });
+                    
+                    polygon.bindPopup(createPopupContent(district));
+                    return polygon;
+                } else {
+                    const marker = L.marker([district.lat, district.lng], {
+                        icon: L.divIcon({
+                            className: 'custom-marker',
+                            html: `<div style="background-color: ${color}; border-radius: 50%; width: 20px; height: 20px; border: 2px solid white;"></div>`
+                        })
+                    });
+                    
+                    marker.bindPopup(createPopupContent(district));
+                    return marker;
+                }
+            } catch (error) {
+                console.error(`Error creating cluster layer for district "${district.name}":`, error);
+                return null;
+            }
+        }
+
+        // Update cluster summary
         function updateClusterSummary() {
-            if (!currentClusters || !currentData) return;
-            const k = Math.max(...currentClusters) + 1;
+            const clusterSummaryDiv = document.getElementById('clusterSummary');
+            if (!currentClusters || !currentData || !clusterSummaryDiv) return;
+            
+            const uniqueClusterIds = [...new Set(currentClusters)].sort((a,b)=>a-b);
+            const k = uniqueClusterIds.length;
             const totalOrders = currentData.reduce((sum, d) => sum + d.orderQty, 0);
             let summary = '';
-            for (let i = 0; i < k; i++) {
-                const clusterDistricts = currentData.filter((_, idx) => currentClusters[idx] === i);
-                const clusterOrders = clusterDistricts.reduce((sum, d) => sum + d.orderQty, 0);
-                const percent = totalOrders > 0 ? ((clusterOrders / totalOrders) * 100).toFixed(1) : 0;
-                const color = clusterColors[i % clusterColors.length];
-                summary += `
-                <div style="border-left: 6px solid ${color}; background: #181c24; margin-bottom: 12px; padding: 10px 16px; border-radius: 6px;">
+            
+            if (k === 0) {
+                summary = `<p style="text-align: center; color: #666; font-style: italic;">No clusters generated yet. Click "Generate Clusters" to start.</p>`;
+            } else {
+                uniqueClusterIds.forEach(i => {
+                    const clusterDistricts = currentData.filter((_, idx) => currentClusters[idx] === i);
+                    const clusterOrders = clusterDistricts.reduce((sum, d) => sum + d.orderQty, 0);
+                    const percent = totalOrders > 0 ? ((clusterOrders / totalOrders) * 100).toFixed(1) : 0;
+                    const color = clusterColors[i % clusterColors.length];
+                    
+                    summary += `
+                <div style="border-left: 6px solid ${color}; background: #f8f9fa; margin-bottom: 12px; padding: 10px 16px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                   <div style="display: flex; align-items: center; margin-bottom: 4px;">
-                    <span style="display:inline-block;width:16px;height:16px;background:${color};border-radius:50%;margin-right:8px;"></span>
-                    <b>Cluster ${i + 1}</b>
-                    <span style="margin-left:12px; color:#aaa; font-size:13px;">Districts: ${clusterDistricts.length}</span>
-                    <span style="margin-left:12px; color:#aaa; font-size:13px;">Orders: ${clusterOrders} (${percent}%)</span>
+                    <span style="display:inline-block;width:16px;height:16px;background:${color};border-radius:50%;margin-right:8px; border: 1px solid rgba(0,0,0,0.2);"></span>
+                    <b style="color: #2c3e50;">Cluster ${i + 1}</b>
+                    <span style="margin-left:12px; color:#666; font-size:13px;">Districts: ${clusterDistricts.length}</span>
+                    <span style="margin-left:12px; color:#666; font-size:13px;">Orders: ${clusterOrders} (${percent}%)</span>
                   </div>
-                  <ul style="margin:0 0 0 24px; padding:0; color:#eee; font-size:14px;">
-                    ${clusterDistricts.map(d => `<li>${d.name}</li>`).join('')}
+                  <ul style="margin:0 0 0 24px; padding:0; color:#555; font-size:14px; list-style-type: disc;">
+                    ${clusterDistricts.map(d => `<li style="margin-bottom: 3px;">${d.name}</li>`).join('')}
                   </ul>
                 </div>
                 `;
+                });
             }
             document.getElementById('clusterSummary').innerHTML = summary;
         }
+
+        // Initialize application when page loads
+        window.addEventListener('load', initApp);
     </script>
 </body>
 </html>
