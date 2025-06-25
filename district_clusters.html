@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>District Clustering Tool</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/ml-kmeans@4.0.0/dist/ml-kmeans.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -57,66 +58,39 @@
             align-items: center;
             gap: 20px;
             flex-wrap: wrap;
+            margin-bottom: 20px;
         }
 
-        .slider-container {
+        .input-group {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 15px;
+            gap: 8px;
             background: rgba(255, 255, 255, 0.9);
             padding: 15px 25px;
-            border-radius: 50px;
+            border-radius: 15px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
 
-        .slider-label {
+        .input-group label {
             font-weight: 600;
             color: #2c3e50;
-            font-size: 1rem;
+            font-size: 0.9rem;
         }
 
-        .slider {
-            width: 200px;
-            height: 8px;
-            border-radius: 5px;
-            background: linear-gradient(to right, #667eea, #764ba2);
-            outline: none;
-            -webkit-appearance: none;
-            appearance: none;
-        }
-
-        .slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            background: #fff;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            border: 3px solid #667eea;
-        }
-
-        .slider::-moz-range-thumb {
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            background: #fff;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            border: 3px solid #667eea;
-        }
-
-        .cluster-value {
-            font-weight: bold;
-            color: #667eea;
-            font-size: 1.2rem;
-            background: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            min-width: 40px;
+        .input {
+            width: 80px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
             text-align: center;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
         }
 
         .button {
@@ -248,6 +222,17 @@
             display: block;
         }
 
+        .district-tag {
+            display: inline-block;
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            margin: 3px;
+            white-space: nowrap;
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 flex-direction: column;
@@ -258,7 +243,7 @@
                 gap: 15px;
             }
             
-            .slider-container {
+            .input-group {
                 flex-direction: column;
                 text-align: center;
             }
@@ -273,14 +258,22 @@
             </div>
             
             <div class="controls">
-                <div class="slider-container">
-                    <span class="slider-label">Cluster Zones:</span>
-                    <input type="range" min="5" max="20" value="10" class="slider" id="clusterSlider">
-                    <span class="cluster-value" id="clusterValue">10</span>
+                <div class="input-group">
+                    <label for="vansInput">Number of Vans</label>
+                    <input type="number" min="1" value="10" class="input" id="vansInput">
                 </div>
-                <button class="button" id="generateBtn" onclick="generateClusters()">
-                    Generate Clusters
-                </button>
+                <div class="input-group">
+                    <label for="parcelsInput">Max Parcels/Van</label>
+                    <input type="number" min="1" value="50" class="input" id="parcelsInput">
+                </div>
+                <div class="button-group">
+                    <button class="button" id="generateBtn" onclick="generateClusters()">
+                        Generate Clusters
+                    </button>
+                    <button class="button" id="calculateShiftsBtn" onclick="calculateShifts()">
+                        Calculate Shifts
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -315,7 +308,14 @@
             </div>
             <div id="clusterSummary">
                 <p style="text-align: center; color: #666; font-style: italic;">
-                    Upload an Excel file to get started
+                    Generate clusters to see summary.
+                </p>
+            </div>
+
+            <h3>🚚 Shift Calculation</h3>
+            <div id="shiftSummary">
+                <p style="text-align: center; color: #666; font-style: italic;">
+                    Enter van and parcel info to calculate shifts.
                 </p>
             </div>
         </div>
@@ -338,6 +338,23 @@
         let currentClusters = [];
         let districtLayers = [];
 
+        // Add a color palette for shifts
+        const shiftColors = [
+            '#43a047', // green
+            '#1976d2', // blue
+            '#fbc02d', // yellow
+            '#e64a19', // orange
+            '#8e24aa', // purple
+            '#00838f', // teal
+            '#c62828', // red
+            '#6d4c41', // brown
+            '#3949ab', // indigo
+            '#00acc1'  // cyan
+        ];
+
+        // Store van/shift assignments globally
+        let shiftAssignments = [];
+
         // Initialize application
         function initApp() {
             initMap();
@@ -359,9 +376,7 @@
 
         // Set up event listeners
         function setupEventListeners() {
-            document.getElementById('clusterSlider').addEventListener('input', function(e) {
-                document.getElementById('clusterValue').textContent = e.target.value;
-            });
+            // No-op for now, can be used for future event listeners
         }
 
         // Show error message
@@ -385,20 +400,19 @@
             const loading = document.getElementById('loading');
             loading.classList.add('show');
 
-            fetch('districts_GeoJSON.xlsx')
-                .then(response => response.arrayBuffer())
+            fetch('RUH - Polygons v2 2506.xlsx')
+                .then(response => {
+                    if (!response.ok) throw new Error(`Could not load Excel file. Status: ${response.status}`);
+                    return response.arrayBuffer();
+                })
                 .then(data => {
                     try {
                         const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
                         let allDistricts = processWorkbook(workbook);
-                        
-                        // Assign sequential IDs after all districts are gathered
                         allDistricts = allDistricts.map((d, index) => ({ ...d, id: index }));
-
                         if (allDistricts.length === 0) {
                             throw new Error('No valid districts found in the Excel file.');
                         }
-                        
                         currentData = allDistricts;
                         updateStats();
                         updateMapWithDistricts();
@@ -438,34 +452,19 @@
             return sheetData
                 .map((row, index) => {
                     try {
-                        const districtName = findColumnValue(row, [
-                            'District name', 'District Name', 'district_name', 'district', 'District',
-                            'name', 'Name', 'DISTRICT_NAME', 'DISTRICT'
-                        ]) || `District ${index + 1}`;
-                        
-                        const geoJsonStr = findColumnValue(row, [
-                            'GeoJSON', 'geojson', 'GeoJson', 'GEOJSON', 'geo_json', 'geometry'
-                        ]);
-                        
-                        const orderQty = parseFloat(findColumnValue(row, [
-                            'Order qty', 'Order Qty', 'order_qty', 'ORDER_QTY', 'orders', 'Orders',
-                            'quantity', 'Quantity', 'qty', 'Qty'
-                        ]) || 0);
-                        
-                        if (!geoJsonStr) return null;
-
-                        const geoJson = parseGeoJson(geoJsonStr);
+                        const districtName = row['name_en'] || `District ${index + 1}`;
+                        const wktOrGeoJson = row['WKT'];
+                        const orderQty = parseInt(row['order_qty'] || 0, 10);
+                        if (!wktOrGeoJson) return null;
+                        const geoJson = parseGeoJson(wktOrGeoJson);
                         if (!geoJson) return null;
-
                         const { coords, isValid } = getGeoJsonCoordinates(geoJson);
                         if (!isValid) return null;
-
                         const { centroidLat, centroidLng } = calculateCentroid(coords);
                         if (isNaN(centroidLat)) return null;
-
                         return {
                             name: districtName,
-                            city: cityName,
+                            city: 'Riyadh',
                             geoJson: geoJson,
                             lat: centroidLat,
                             lng: centroidLng,
@@ -490,11 +489,33 @@
             return null;
         }
 
-        // Parse GeoJSON string
+        // Enhanced parseGeoJson to handle both GeoJSON and WKT POLYGON
         function parseGeoJson(geoJsonStr) {
             try {
-                return typeof geoJsonStr === 'string' ? JSON.parse(geoJsonStr) : geoJsonStr;
+                // If it's already an object, return as is
+                if (typeof geoJsonStr === 'object') return geoJsonStr;
+                // Try to parse as JSON
+                if (geoJsonStr.trim().startsWith('{') || geoJsonStr.trim().startsWith('[')) {
+                    return JSON.parse(geoJsonStr);
+                }
+                // Try to parse as WKT POLYGON
+                if (geoJsonStr.trim().toUpperCase().startsWith('POLYGON')) {
+                    // Extract the coordinates string
+                    const match = geoJsonStr.match(/POLYGON *\(\(([^)]+)\)\)/i);
+                    if (match && match[1]) {
+                        // Split into coordinate pairs
+                        const pairs = match[1].split(',').map(s => s.trim().split(/\s+/).map(Number));
+                        // WKT is [lng, lat], so keep as is
+                        return {
+                            type: 'Polygon',
+                            coordinates: [pairs]
+                        };
+                    }
+                }
+                // If not recognized, return null
+                return null;
             } catch (e1) {
+                // Try to clean up and parse as JSON
                 try {
                     const cleaned = geoJsonStr
                         .replace(/^"|"$/g, '')
@@ -570,11 +591,20 @@
         // Update map with districts
         function updateMapWithDistricts() {
             if (!map || !currentData || currentData.length === 0) return;
-            
             clearMapLayers();
-            
             const bounds = L.latLngBounds([]);
-            
+            // Collect centroids
+            const centroids = currentData.map(d => [d.lat, d.lng]);
+            // Calculate mean and stddev
+            const meanLat = centroids.reduce((sum, c) => sum + c[0], 0) / centroids.length;
+            const meanLng = centroids.reduce((sum, c) => sum + c[1], 0) / centroids.length;
+            const stdLat = Math.sqrt(centroids.reduce((sum, c) => sum + Math.pow(c[0] - meanLat, 2), 0) / centroids.length);
+            const stdLng = Math.sqrt(centroids.reduce((sum, c) => sum + Math.pow(c[1] - meanLng, 2), 0) / centroids.length);
+            // Only include centroids within 2 stddevs
+            const filteredCentroids = centroids.filter(c =>
+                Math.abs(c[0] - meanLat) <= 2 * stdLat &&
+                Math.abs(c[1] - meanLng) <= 2 * stdLng
+            );
             currentData.forEach(district => {
                 const layer = createDistrictLayer(district);
                 if (layer) {
@@ -586,8 +616,11 @@
                     }
                 }
             });
-            
-            if (bounds.isValid()) {
+            // Fit to filtered centroids
+            if (filteredCentroids.length > 0) {
+                const centroidBounds = L.latLngBounds(filteredCentroids);
+                map.fitBounds(centroidBounds, { padding: [20, 20] });
+            } else if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [20, 20] });
             }
         }
@@ -658,19 +691,23 @@
             `;
         }
 
-        // Generate clusters
+        // Generate clusters based on number of vans
         function generateClusters() {
             if (!currentData || currentData.length === 0) {
                 showError('No data available!');
                 return;
             }
-            
             const loading = document.getElementById('loading');
-            loading.classList.add('show');
+            const nVans = parseInt(document.getElementById('vansInput').value, 10);
+            if (isNaN(nVans) || nVans <= 0) {
+                showError('Please enter a valid number of vans.');
+                return;
+            }
             
+            loading.classList.add('show');
             setTimeout(() => {
                 try {
-                    const numClusters = parseInt(document.getElementById('clusterSlider').value);
+                    const numClusters = nVans;
                     currentClusters = optimizedClustering(currentData, numClusters);
                     updateMapWithClusters();
                     updateClusterSummary();
@@ -860,16 +897,24 @@
         // Update map with clusters
         function updateMapWithClusters() {
             if (!map || !currentData || currentData.length === 0) return;
-            
             clearMapLayers();
-            
+            // Collect centroids
+            const centroids = currentData.map(d => [d.lat, d.lng]);
+            // Calculate mean and stddev
+            const meanLat = centroids.reduce((sum, c) => sum + c[0], 0) / centroids.length;
+            const meanLng = centroids.reduce((sum, c) => sum + c[1], 0) / centroids.length;
+            const stdLat = Math.sqrt(centroids.reduce((sum, c) => sum + Math.pow(c[0] - meanLat, 2), 0) / centroids.length);
+            const stdLng = Math.sqrt(centroids.reduce((sum, c) => sum + Math.pow(c[1] - meanLng, 2), 0) / centroids.length);
+            // Only include centroids within 2 stddevs
+            const filteredCentroids = centroids.filter(c =>
+                Math.abs(c[0] - meanLat) <= 2 * stdLat &&
+                Math.abs(c[1] - meanLng) <= 2 * stdLng
+            );
             const bounds = L.latLngBounds([]);
-            
             currentData.forEach((district, index) => {
                 const clusterIndex = currentClusters[index];
                 const color = clusterColors[clusterIndex % clusterColors.length];
                 const layer = createClusterLayer(district, color, clusterIndex);
-                
                 if (layer) {
                     layer.addTo(map);
                     districtLayers.push(layer);
@@ -880,8 +925,11 @@
                     }
                 }
             });
-            
-            if (bounds.isValid()) {
+            // Fit to filtered centroids
+            if (filteredCentroids.length > 0) {
+                const centroidBounds = L.latLngBounds(filteredCentroids);
+                map.fitBounds(centroidBounds, { padding: [20, 20] });
+            } else if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [20, 20] });
             }
         }
@@ -937,21 +985,158 @@
                     const color = clusterColors[i % clusterColors.length];
                     
                     summary += `
-                <div style="border-left: 6px solid ${color}; background: #f8f9fa; margin-bottom: 12px; padding: 10px 16px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                  <div style="display: flex; align-items: center; margin-bottom: 4px;">
-                    <span style="display:inline-block;width:16px;height:16px;background:${color};border-radius:50%;margin-right:8px; border: 1px solid rgba(0,0,0,0.2);"></span>
-                    <b style="color: #2c3e50;">Cluster ${i + 1}</b>
-                    <span style="margin-left:12px; color:#666; font-size:13px;">Districts: ${clusterDistricts.length}</span>
-                    <span style="margin-left:12px; color:#666; font-size:13px;">Orders: ${clusterOrders} (${percent}%)</span>
-                  </div>
-                  <ul style="margin:0 0 0 24px; padding:0; color:#555; font-size:14px; list-style-type: disc;">
-                    ${clusterDistricts.map(d => `<li style="margin-bottom: 3px;">${d.name}</li>`).join('')}
-                  </ul>
-                </div>
-                `;
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span style="display:inline-block;width:16px;height:16px;background:${color};border-radius:50%;margin-right:8px; border: 1px solid rgba(0,0,0,0.2);"></span>
+                            <b style="color: #2c3e50;">Cluster ${i + 1}</b>
+                            <span style="margin-left:12px; color:#666; font-size:13px;">Districts: ${clusterDistricts.length}</span>
+                            <span style="margin-left:12px; color:#666; font-size:13px;">Orders: ${clusterOrders} (${percent}%)</span>
+                        </div>
+                        <ul style="margin:0 0 0 24px; padding:0; color:#555; font-size:14px; list-style-type: disc;">
+                            ${clusterDistricts.map(d => `<li style="margin-bottom: 3px;">${d.name}</li>`).join('')}
+                        </ul>
+                    </div>
+                    `;
                 });
             }
             document.getElementById('clusterSummary').innerHTML = summary;
+        }
+
+        // New function: calculate shifts
+        function calculateShifts() {
+            if (!currentData || currentData.length === 0) {
+                showError('No data available!');
+                return;
+            }
+
+            const nVans = parseInt(document.getElementById('vansInput').value, 10);
+            const pMax = parseInt(document.getElementById('parcelsInput').value, 10);
+
+            if (isNaN(nVans) || nVans <= 0 || isNaN(pMax) || pMax <= 0) {
+                showError('Please enter valid numbers for vans and parcels/van.');
+                return;
+            }
+
+            // Prepare a flat list of parcels by district
+            let districtParcels = currentData.map(d => ({
+                name: d.name,
+                districtRef: d,
+                total: d.orderQty,
+                remaining: d.orderQty,
+                centroid: [d.lat, d.lng]
+            }));
+
+            // Calculate number of shifts
+            const totalParcels = currentData.reduce((sum, d) => sum + d.orderQty, 0);
+            const minShifts = Math.ceil(totalParcels / (nVans * pMax));
+            let summary = `<p><strong>Total Parcels:</strong> ${totalParcels}</p>`;
+            summary += `<p><strong>Minimum Shifts Needed:</strong> ${minShifts}</p>`;
+
+            // Assign parcels to vans per shift using k-means
+            shiftAssignments = [];
+            let shifts = [];
+            let districtsLeft = districtParcels.filter(d => d.remaining > 0);
+            for (let shift = 0; shift < minShifts; shift++) {
+                // Only cluster districts with remaining parcels
+                let activeDistricts = districtsLeft.filter(d => d.remaining > 0);
+                if (activeDistricts.length === 0) break;
+                // Prepare data for k-means
+                let data = activeDistricts.map(d => d.centroid);
+                let k = Math.min(nVans, data.length);
+                let clusters = mlKMeans(data, k);
+                // Assign districts to clusters
+                let clusterGroups = Array.from({ length: k }, () => []);
+                clusters.clusters.forEach((clusterIdx, i) => {
+                    clusterGroups[clusterIdx].push(activeDistricts[i]);
+                });
+                // For each cluster, assign up to pMax parcels to a van
+                let vans = Array.from({ length: nVans }, () => ({ districts: [], parcels: 0 }));
+                let vanUsed = 0;
+                clusterGroups.forEach((group, cIdx) => {
+                    let parcelsInCluster = group.reduce((sum, d) => sum + d.remaining, 0);
+                    let parcelsToAssign = Math.min(parcelsInCluster, pMax);
+                    let vanIdx = vanUsed < nVans ? vanUsed : 0;
+                    vanUsed++;
+                    // Assign parcels from districts in this cluster to the van
+                    group.forEach(d => {
+                        if (parcelsToAssign <= 0) return;
+                        let assignCount = Math.min(d.remaining, parcelsToAssign);
+                        vans[vanIdx].districts.push({
+                            name: d.name,
+                            districtRef: d.districtRef,
+                            total: d.total,
+                            count: assignCount,
+                            split: d.total > pMax,
+                            centroid: d.centroid
+                        });
+                        vans[vanIdx].parcels += assignCount;
+                        d.remaining -= assignCount;
+                        parcelsToAssign -= assignCount;
+                    });
+                });
+                shifts.push(vans);
+                shiftAssignments.push(vans);
+                // Update districtsLeft for next shift
+                districtsLeft = districtsLeft.filter(d => d.remaining > 0);
+            }
+
+            // Build UI for all shifts
+            summary += `<div style='margin-top:18px;'>`;
+            shifts.forEach((vans, shiftIdx) => {
+                summary += `<h4 style='margin:18px 0 8px 0;'>Shift ${shiftIdx + 1}</h4>`;
+                summary += `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+                    <thead>
+                        <tr style="background:#f0f0f0;">
+                            <th style="padding:8px;border:1px solid #ddd;">Van</th>
+                            <th style="padding:8px;border:1px solid #ddd;">Assigned Districts</th>
+                            <th style="padding:8px;border:1px solid #ddd;">Total Parcels</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                vans.forEach((van, i) => {
+                    summary += `<tr>
+                        <td style="padding:8px;border:1px solid #ddd;font-weight:bold;text-align:center;">
+                            <button class="button" style="padding:4px 12px;font-size:1em;min-width:60px;" onclick="highlightVan(${shiftIdx},${i})">Van ${i + 1}</button>
+                        </td>
+                        <td style="padding:8px;border:1px solid #ddd;">${van.districts.map(d => `<span class=\"district-tag\">${d.name}${d.split ? ` (${d.count})` : ''}</span>`).join(" ")}</td>
+                        <td style="padding:8px;border:1px solid #ddd;text-align:center;">${van.parcels}</td>
+                    </tr>`;
+                });
+                summary += `</tbody></table>`;
+            });
+            summary += `<div style='text-align:center;margin:10px 0;'><button class='button' style='background:#888;' onclick='showAllDistricts()'>Show All</button></div>`;
+            summary += `</div>`;
+
+            document.getElementById('shiftSummary').innerHTML = summary;
+            showSuccess('Shift calculation complete!');
+        }
+
+        // Highlight districts for a van in a shift
+        function highlightVan(shiftIdx, vanIdx) {
+            if (!map || !shiftAssignments[shiftIdx] || !shiftAssignments[shiftIdx][vanIdx]) return;
+            clearMapLayers();
+            const van = shiftAssignments[shiftIdx][vanIdx];
+            const color = shiftColors[shiftIdx % shiftColors.length];
+            van.districts.forEach(chunk => {
+                // Find the district object by name (chunk.districtRef)
+                const district = chunk.districtRef;
+                if (district && district.geoJson) {
+                    const leafletCoords = convertGeoJsonToLeaflet(district.geoJson);
+                    const polygon = L.polygon(leafletCoords, {
+                        color: color,
+                        weight: 2,
+                        fillColor: color,
+                        fillOpacity: 0.6
+                    });
+                    polygon.bindPopup(`<b>${district.name}</b><br>Parcels: ${chunk.count}${chunk.split ? ` (split from ${chunk.total})` : ''}`);
+                    polygon.addTo(map);
+                    districtLayers.push(polygon);
+                }
+            });
+        }
+
+        // Show all districts again
+        function showAllDistricts() {
+            updateMapWithClusters();
         }
 
         // Initialize application when page loads
